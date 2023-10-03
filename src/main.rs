@@ -2,6 +2,7 @@
 #![allow(unused_variables)]
 #![allow(unused_mut)]
 #![allow(unused_imports)]
+#![allow(warnings)]
 
 mod io;
 mod nquery;

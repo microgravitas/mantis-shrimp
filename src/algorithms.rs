@@ -114,7 +114,7 @@ impl<'a> VCAlgorithm<'a> {
                     break; // No further improvement possible
                 }
             } else if cover_size == 1 {
-                println!("Covering: {} candidates", self.cover_candidates.len() );
+                println!("Covering: {} cover candidates", self.cover_candidates.len() );
                 'outer: for c in self.cover_candidates.iter() {
                     if self.local_upper_bound[c] as usize <= self.vc_dim {
                         continue;
@@ -246,13 +246,12 @@ impl<'a> VCAlgorithm<'a> {
         let degree_profile = generate_degree_profile(self.vc_dim+1);
         let n = self.graph.num_vertices();
         println!("  > Degree profile is {degree_profile:?}");
-
         self.shatter_candidates.retain(|v| {
             let degrees = self.nquery.degree_profile(v);
             dominates_profile(&degrees, &degree_profile)
         });
 
-        println!("  > Found {} out of {n} as witness candidates for {}-shattered set", self.shatter_candidates.len(), self.vc_dim);
+        println!("  > Found {} out of {n} as candidates for {}-shattered set", self.shatter_candidates.len(), self.vc_dim);
 
         self.cover_candidates.retain(|v| {
             let mut covers = false;
