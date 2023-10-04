@@ -23,6 +23,15 @@ impl<'a> NQuery<'a> {
         NQuery { R, graph, max_query_size: 0, degeneracy }
     }
 
+    pub fn query_R(&self, X: &Vec<Vertex>) -> i32 {
+        if X.is_empty() {
+            return 0
+        }
+
+        let res = self.R[X];
+        res
+    }
+
     fn query_uncor(&self, X: &Vec<Vertex>, S: &Vec<Vertex>) -> i32 {
         if X.is_empty() {
             return 0
@@ -73,6 +82,23 @@ impl<'a> NQuery<'a> {
         }
 
         self.max_query_size = size;
+    }
+
+    pub fn ensure_size_exact(&mut self, size:usize) {
+        if size <= self.max_query_size || self.max_query_size == self.degeneracy {
+            return;
+        } 
+
+        println!("Recomputing R for exact query size {size}...");
+
+        for u in self.graph.vertices() {
+            let mut N = self.graph.left_neighbours(u);
+            N.sort_unstable();
+    
+            for subset in N.into_iter().combinations(size) {
+                self.R[&subset] += 1;
+            }
+        }
     }
 
     pub fn ensure_size_restricted(&mut self, size:usize, query_candidates:&VertexSet) {

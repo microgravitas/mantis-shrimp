@@ -3,7 +3,7 @@ use std::collections::BTreeSet;
 use graphbench::{graph::*, iterators::LeftNeighIterable};
 use graphbench::degengraph::DegenGraph;
 
-use crate::nquery::NQuery;
+use crate::{nquery::NQuery, vecset::intersection};
 
 use itertools::*;
 use crate::skipcombs::{SkippableCombinations, SkippableCombinationsIter};
@@ -424,5 +424,86 @@ impl<'a> BicliqueAlgorithm<'a> {
         }
 
         println!("Biclique size is at most {}", self.biclique_upper);
+    }
+}
+
+
+
+pub struct CClosureAlgorithm<'a> {
+    graph: &'a DegenGraph,
+    nquery: NQuery<'a>,
+    d: usize,
+}
+
+impl<'a> CClosureAlgorithm<'a> {
+    pub fn new(graph: &'a DegenGraph) -> Self {
+        let d = *graph.left_degrees().values().max().unwrap() as usize;
+
+        let mut nquery = NQuery::new(graph);
+        Self{ graph, d, nquery }
+    }
+
+    pub fn run(&mut self) {
+        
+        // create R datastructure restricted to subsets of size 2
+        self.nquery.ensure_size_exact(2); 
+
+        let mut c = 0;
+
+        // case 1:
+        // u < v < x
+        for x in self.graph.vertices() {
+            let mut N = self.graph.left_neighbours(x);
+
+            for mut pair in N.into_iter().combinations(2) {
+                pair.sort_unstable();  // so we can query R and know u comes before v
+                let u = pair[0];
+                let v = pair[1];
+
+                if !self.graph.adjacent(&u, &v) {
+                    // first calculate r ...
+                    // ... the common N of u and v to the right of v
+                    let r = self.nquery.query_R(&pair);
+
+                    // now calculate l ...
+                    // ... the common N of u and v to the left of v
+                    let v_left_neigh:Vec<Vertex> = self.graph.left_neighbours(&v).into_iter().sorted_unstable().collect();
+                    let u_neigh:Vec<Vertex> = self.graph.neighbours(&u).cloned().sorted_unstable().collect();
+                    let neigh_intersection = intersection(&v_left_neigh, &u_neigh);
+                    let l = neigh_intersection.len() as i32;
+
+                    let common_neigh = r + l;
+
+                    if common_neigh > c {
+                        c = common_neigh;
+                    }
+                }
+            }
+        }
+
+        // case 2:
+        // u < x < v
+        for v in self.graph.vertices() {
+            let v_left_neigh:Vec<Vertex> = self.graph.left_neighbours(&v).into_iter().sorted_unstable().collect();
+            for x in self.graph.left_neighbours(&v) {
+                for u in self.graph.left_neighbours(&x) {
+                    if !self.graph.adjacent(&u, &v) {
+                        let u_neigh:Vec<Vertex> = self.graph.neighbours(&u).cloned().sorted_unstable().collect();
+                        let neigh_intersection = intersection(&v_left_neigh, &u_neigh);
+                        let neigh_size = neigh_intersection.len() as i32;
+
+                        if neigh_size > c {
+                            c = neigh_size;
+                        }
+                    }
+                }
+            }
+        }
+
+        // case 3
+        // x < u < v
+        for v in self.graph.vertices() {
+
+        }
     }
 }
