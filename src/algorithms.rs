@@ -481,11 +481,19 @@ impl<'a> CClosureAlgorithm<'a> {
             }
         }
 
+        // check if c is bigger that d
+        // in this case; return c 
+        if c >= self.d as i32{
+            println!("C-closure found to be at least size {}.", c);
+            println!("Algorithm exited as c-closure found to be greater than degeneracy.");
+            return
+        }
+
         // case 2:
         // u < x < v
         for v in self.graph.vertices() {
             let v_left_neigh:Vec<Vertex> = self.graph.left_neighbours(&v).into_iter().sorted_unstable().collect();
-            for x in self.graph.left_neighbours(&v) {
+            for x in self.graph.left_neighbours(&v) { 
                 for u in self.graph.left_neighbours(&x) {
                     if !self.graph.adjacent(&u, &v) {
                         let u_neigh:Vec<Vertex> = self.graph.neighbours(&u).cloned().sorted_unstable().collect();
@@ -500,10 +508,30 @@ impl<'a> CClosureAlgorithm<'a> {
             }
         }
 
+        // as above
+        if c >= self.d as i32{
+            println!("C-closure found to be at least size {}.", c);
+            println!("Algorithm exited as c-closure found to be greater than degeneracy.");
+            return
+        }
+
         // case 3
         // x < u < v
         for v in self.graph.vertices() {
+            let v_left_neigh:Vec<Vertex> = self.graph.left_neighbours(&v).into_iter().sorted_unstable().collect();
+            for u in self.graph.vertices() {
+                let u_left_neigh:Vec<Vertex> = self.graph.left_neighbours(&u).into_iter().sorted_unstable().collect();
+                let neigh_intersection = intersection(&v_left_neigh, &u_left_neigh);
+                let neigh_size = neigh_intersection.len() as i32;
 
+                if neigh_size > c {
+                    c = neigh_size;
+                }
+
+            }
         }
+    
+    println!("C-closure found to be size {}.", c);
+        
     }
 }
