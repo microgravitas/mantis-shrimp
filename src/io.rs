@@ -2,6 +2,7 @@ use std::path::Path;
 use std::ffi::OsStr;
 
 use graphbench::editgraph::EditGraph;
+use graphbench::io::*;
 use graphbench::graph::VertexSet;
 
 pub fn load_graph(file:&Path) -> Result<EditGraph, String> {

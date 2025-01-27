@@ -19,9 +19,9 @@ use algorithms::*;
 
 use graphbench::editgraph::EditGraph;
 use graphbench::graph::*;
-use graphbench::io::load_vertex_set;
-
+use graphbench::io::*;
 use graphbench::degengraph::*;
+use graphbench::algorithms::lineargraph::LinearGraphAlgorithms;
 use itertools::*;
 
 use fxhash::FxHashMap;
@@ -46,6 +46,10 @@ struct Args {
 
     ///  (VC only) restrict search of shattered set to these vertices
     shattered_candidates:Option<String>,
+
+    /// (VC only) 
+    #[clap(short, long)]
+    no_brute_force: bool
 }
 
 #[derive(Clone, Debug, ValueEnum)]
@@ -82,10 +86,10 @@ fn main() -> Result<(), &'static str> {
     match args.statistic {
         StatisticArg::VC => {
             println!("Computing VC dimension");
-            let mut alg = VCAlgorithm::new(&graph);
+            let mut alg = VCAlgorithm::new(&graph);          
 
             if let Some(filename) = args.shattered_candidates {
-                let cand_set = match load_vertex_set(&filename) {
+                let cand_set = match VertexSet::from_file(&filename) {
                     Ok(cand_set) => cand_set,
                     Err(error) => {
                         println!("{:?}", error);
@@ -95,6 +99,11 @@ fn main() -> Result<(), &'static str> {
                 let cand_size = cand_set.len();
                 println!("Restricting VC search to {cand_size} vertices contained in `{filename}`");
                 alg.set_shatter_candidates(&cand_set);
+            }
+
+            if args.no_brute_force {
+                println!("Disabled brute force (--no-brute-force was set");
+                alg.set_brute_force(false)
             }
 
             alg.run();            

@@ -23,7 +23,7 @@ impl<'a> NQuery<'a> {
         NQuery { R, graph, max_query_size: 0, degeneracy }
     }
 
-    fn query_uncor(&self, X: &Vec<Vertex>, S: &Vec<Vertex>) -> i32 {
+    pub fn query_uncor(&self, X: &Vec<Vertex>, S: &Vec<Vertex>) -> i32 {
         if X.is_empty() {
             return 0
         }
@@ -43,7 +43,7 @@ impl<'a> NQuery<'a> {
         res
     }
 
-    fn left_neighbour_set(&self, S: &Vec<Vertex>) -> Vec<Vertex> {
+    fn left_neighbour_set(&self, S: &[Vertex]) -> Vec<Vertex> {
         let mut res: BTreeSet<Vertex> = BTreeSet::default();
 
         for u in S {
@@ -99,7 +99,7 @@ impl<'a> NQuery<'a> {
         self.max_query_size = size;
     }
 
-    /// Preparse the vertex set S for neighbourhood-queries, e.g. for each subset X of S
+    /// Prepares the vertex set S for neighbourhood-queries, e.g. for each subset X of S
     /// we obtain the number of vertices in G which have all of X as neighbours an none of S\X.
     fn prepare(&self,  S: &[Vertex]) -> SmallSetFunc {
         let mut S:Vec<u32> = S.iter().cloned().collect();
@@ -146,6 +146,35 @@ impl<'a> NQuery<'a> {
     }
 
     pub fn is_shattered(&self, S: &[Vertex]) -> bool {
+        assert!(!S.is_empty());
+        
+        // Some early-outs since the computation is expensiv
+        // The set S must have at least one apex.
+        if self.R[S] == 0 { 
+            // S has not 'right' apex, so we search for a 'left' apex. If it exists,
+            // it must be in the left neighbourhood of the rightmost vertex of S.
+            let rightmost = self.graph.rightmost(S).unwrap();
+            let cands = self.graph.left_neighbours(&rightmost);
+            let mut found_apex = false;
+            for a in cands {
+                let mut is_apex = true;
+                for x in S {
+                    if !self.graph.adjacent(&a, x) {
+                        is_apex = false;
+                        break;
+                    }
+                }
+                if is_apex {
+                    found_apex = true;
+                    break;
+                }
+            }
+
+            if !found_apex {
+                return false
+            }
+        }
+
         let I = self.prepare(S);
         if I.count_nonzero() != 2_usize.pow(S.len() as u32) {
             return false
@@ -183,7 +212,7 @@ impl<'a> NQuery<'a> {
 #[cfg(test)]
 mod  tests {
     use super::*;    
-    use graphbench::{editgraph::EditGraph, graph::MutableGraph};
+    use graphbench::{editgraph::EditGraph, graph::MutableGraph, io::*};
     use rand::prelude::*;
     use std::collections::BTreeSet;
 
@@ -244,7 +273,7 @@ mod  tests {
             nquery.ensure_size_restricted(k as usize, &D.vertices().cloned().collect());
 
             let result = nquery.is_shattered(&(0..k).into_iter().collect_vec());
-            assert_eq!(result, true);            
+            assert_eq!(result, true);
         }
     }
 

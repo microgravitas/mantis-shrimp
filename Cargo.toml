@@ -10,6 +10,7 @@ fxhash = "0.2.1"
 graphbench = { git = "https://github.com/microgravitas/graphbench.git" } 
 itertools = "0.10.5"
 clap = { version = "3.2.17", features = ["derive"] }
+radix_trie = "0.2"
 
 [dev-dependencies]
 rand = "0.8.5"
