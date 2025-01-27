@@ -148,30 +148,32 @@ impl<'a> NQuery<'a> {
     pub fn is_shattered(&self, S: &[Vertex]) -> bool {
         assert!(!S.is_empty());
         
-        // Some early-outs since the computation is expensiv
-        // The set S must have at least one apex.
-        if self.R[S] == 0 { 
-            // S has not 'right' apex, so we search for a 'left' apex. If it exists,
-            // it must be in the left neighbourhood of the rightmost vertex of S.
-            let rightmost = self.graph.rightmost(S).unwrap();
-            let cands = self.graph.left_neighbours(&rightmost);
-            let mut found_apex = false;
-            for a in cands {
-                let mut is_apex = true;
-                for x in S {
-                    if !self.graph.adjacent(&a, x) {
-                        is_apex = false;
+        // Some early-outs since the Mobius inversion is expensive for larger sets.
+        if S.len() > 4 {
+            // 1. The set S must have at least one apex.
+            if self.R[S] == 0 { 
+                // S has not 'right' apex, so we search for a 'left' apex. If it exists,
+                // it must be in the left neighbourhood of the rightmost vertex of S.
+                let rightmost = self.graph.rightmost(S).unwrap();
+                let cands = self.graph.left_neighbours(&rightmost);
+                let mut found_apex = false;
+                for a in cands {
+                    let mut is_apex = true;
+                    for x in S {
+                        if !self.graph.adjacent(&a, x) {
+                            is_apex = false;
+                            break;
+                        }
+                    }
+                    if is_apex {
+                        found_apex = true;
                         break;
                     }
                 }
-                if is_apex {
-                    found_apex = true;
-                    break;
-                }
-            }
 
-            if !found_apex {
-                return false
+                if !found_apex {
+                    return false
+                }
             }
         }
 
