@@ -4,6 +4,8 @@ use graphbench::degengraph::DegenGraph;
 use graphbench::algorithms::LinearGraphAlgorithms;
 use graphbench::{graph::*, iterators::LeftNeighIterable};
 
+use graphbench::datastructures::SReachTraceOracle;
+
 use crate::nquery::NQuery;
 
 use crate::skipcombs::{SkippableCombinations, SkippableCombinationsIter};
@@ -46,7 +48,7 @@ fn dominates_profile(degA: &Vec<usize>, degB: &Vec<usize>) -> bool {
 
 pub struct VCAlgorithm<'a> {
     graph: &'a DegenGraph,
-    nquery: NQuery<'a>,
+    oracle: SReachTraceOracle,
     local_lower_bound: VertexMap<u8>,
     local_upper_bound: VertexMap<u8>,
     shatter_candidates: VertexSet,
@@ -74,14 +76,14 @@ impl<'a> VCAlgorithm<'a> {
             .collect();
 
         let vc_dim = 1;
-        let mut nquery = NQuery::new(graph);
+        let mut oracle = SReachTraceOracle::for_graph(graph);
         VCAlgorithm {
             graph,
             d,
             logd,
             shatter_candidates,
             cover_candidates,
-            nquery,
+            oracle,
             local_lower_bound,
             local_upper_bound,
             vc_dim,
@@ -119,9 +121,6 @@ impl<'a> VCAlgorithm<'a> {
             let cover_estimate = binom(self.cover_candidates.len(), cover_size)
                 * binom(cover_size * self.d, self.vc_dim + 1);
 
-            self.nquery
-                .ensure_size_restricted(self.vc_dim + 1, &self.shatter_candidates);
-
             if brute_force_estimate < cover_estimate && self.allow_brute_force {
                 println!(
                     "Brute-force: ({} choose {}) candidates",
@@ -136,7 +135,7 @@ impl<'a> VCAlgorithm<'a> {
                 while let Some(S) = it.next() {
                     let S: Vec<u32> = S.into_iter().cloned().collect(); // TODO: Better way of converting Vec<&u32> to Vec<u32>?
 
-                    if self.nquery.is_shattered(&S) {
+                    if self.oracle.is_shattered(&S, S.len() as u32, &self.graph) {
                         self.vc_dim += 1;
                         println!("Found shattered set of size {}: {:?}", self.vc_dim, S);
 
@@ -148,7 +147,7 @@ impl<'a> VCAlgorithm<'a> {
                     // and skip all subsequent combinations with the same prefix.
                     if self.vc_dim + 1 > 3 {
                         let mut k = 2;
-                        while self.nquery.is_shattered(&S[..k]) && k < self.vc_dim - 1 {
+                        while self.oracle.is_shattered(&S[..k], k as u32, &self.graph) && k < self.vc_dim - 1 {
                             k += 1;
                         }
                         if k < self.vc_dim - 1 {
@@ -183,7 +182,7 @@ impl<'a> VCAlgorithm<'a> {
                     // println!("  Checking ({} choose {}) subsets for cover {:?}", N.len(), self.vc_dim+1, C);
                     let mut it = N.into_iter().combinations_skippable(self.vc_dim + 1);
                     while let Some(S) = it.next() {
-                        if self.nquery.is_shattered(&S) {
+                        if self.oracle.is_shattered(&S, S.len() as u32, &self.graph) {
                             self.vc_dim += 1;
                             println!("Found shattered set of size {}: {:?}", self.vc_dim, S);
 
@@ -198,7 +197,7 @@ impl<'a> VCAlgorithm<'a> {
                         // and skip all subsequent combinations with the same prefix.
                         if self.vc_dim + 1 > 3 {
                             let mut k = 2;
-                            while self.nquery.is_shattered(&S[..k]) && k < self.vc_dim - 1 {
+                            while self.oracle.is_shattered(&S[..k], k as u32, &self.graph) && k < self.vc_dim - 1 {
                                 k += 1;
                             }
                             if k < self.vc_dim - 1 {
@@ -294,7 +293,7 @@ impl<'a> VCAlgorithm<'a> {
                         let mut S_vec:Vec<Vertex> = S.iter().cloned().collect();
                         S_vec.sort_unstable();
                         if unshattered_set_trie.get(&S_vec).is_none() {
-                            if self.nquery.is_shattered(&S) {
+                            if self.oracle.is_shattered(&S, S.len() as u32, &self.graph) {
                                 self.vc_dim += 1;
                                 println!("Found shattered set of size {}: {:?}", self.vc_dim, S);
                                 improved = true;
@@ -307,7 +306,7 @@ impl<'a> VCAlgorithm<'a> {
                         // and skip all subsequent combinations with the same prefix.
                         if self.vc_dim + 1 > 3 {
                             let mut k = 2;
-                            while self.nquery.is_shattered(&S[..k]) && k < self.vc_dim - 1 {
+                            while self.oracle.is_shattered(&S[..k], k as u32, &self.graph) && k < self.vc_dim - 1 {
                                 k += 1;
                             }
                             if k < self.vc_dim - 1 {
@@ -343,10 +342,16 @@ impl<'a> VCAlgorithm<'a> {
 
         // Remove all shatter candidates that do not have enough neigbhours of sufficiently
         // high degree
-        self.shatter_candidates.retain(|v| {
-            let degrees = self.nquery.degree_profile(v);
+        let new_shatter_candidates = self.shatter_candidates.iter().filter(|v| {
+            let degrees = self.degree_profile(v);
             dominates_profile(&degrees, &degree_profile)
-        });
+        }).cloned().collect();
+
+        self.shatter_candidates = new_shatter_candidates;
+        // self.shatter_candidates.retain(|v| {
+        //     let degrees = self.degree_profile(v);
+        //     dominates_profile(&degrees, &degree_profile)
+        // });
 
         println!(
             "  > Found {} out of {n} as witness candidates for {}-shattered set",
@@ -408,6 +413,16 @@ impl<'a> VCAlgorithm<'a> {
             self.vc_dim
         );
     }
+
+    pub fn degree_profile(&self, v:&Vertex) -> Vec<usize> {
+        let mut degrees = Vec::default();
+        for u in self.graph.neighbours(v) {
+            degrees.push(self.graph.degree(u) as usize);
+        }
+        degrees.sort_unstable();
+        degrees.reverse();
+        degrees
+    }    
 }
 
 pub struct LadderAlgorithm<'a> {
