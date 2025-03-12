@@ -3,7 +3,7 @@
 #![allow(non_snake_case)]
 
 use core::fmt;
-use std::ops::{Index, IndexMut, Add, Sub};
+use std::{borrow::Borrow, ops::{Add, Index, IndexMut, Sub}};
 
 use fxhash::FxHashMap;
 use itertools::Itertools;
@@ -54,11 +54,27 @@ impl Default for SetFunc {
     }
 }
 
-impl<'a, I> Index<I> for SetFunc where I: IntoIterator<Item=&'a u32> {
+// impl<'a, I> Index<I> for SetFunc where I: IntoIterator<Item=&'a u32> {
+//     type Output = i32;
+
+//     fn index(&self, query: I) -> &Self::Output {
+//         let mut set:Vec<u32> = query.into_iter().cloned().collect();
+//         set.sort_unstable();
+//         set.dedup();
+
+//         if self.values.contains_key(&set) {
+//             &self.values[&set]
+//         } else {
+//             &0
+//         }
+//     }
+// }
+
+impl<I, V> Index<I> for SetFunc where V: Borrow<u32>, I: IntoIterator<Item=V> {
     type Output = i32;
 
     fn index(&self, query: I) -> &Self::Output {
-        let mut set:Vec<u32> = query.into_iter().cloned().collect();
+        let mut set:Vec<u32> = query.into_iter().map(|u| *u.borrow()).collect();
         set.sort_unstable();
         set.dedup();
 
