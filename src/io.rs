@@ -2,6 +2,7 @@ use std::path::Path;
 use std::ffi::OsStr;
 
 use graphbench::editgraph::EditGraph;
+use graphbench::io::*;
 
 pub fn load_graph(file:&Path) -> Result<EditGraph, String> {
     if !(file.exists() && file.is_file()) {
