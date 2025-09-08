@@ -22,10 +22,10 @@ fn binom(n: usize, k: usize) -> usize {
     res
 }
 
-fn generate_degree_profile(k: usize) -> Vec<usize> {
+fn generate_degree_profile(k:usize) -> Vec<usize> {
     let mut res = Vec::default();
     for d in (1..=k).rev() {
-        for _ in 0..binom(k - 1, d - 1) {
+        for _ in 0..binom(k, d) {
             res.push(d);
         }
     }
@@ -336,82 +336,35 @@ impl<'a> VCAlgorithm<'a> {
 
     fn recompute_candidates(&mut self) {
         println!("  > Recomputing candidates");
-        let degree_profile = generate_degree_profile(self.vc_dim + 1);
+        let degree_profile = generate_degree_profile(self.vc_dim+1);
         let n = self.graph.num_vertices();
         println!("  > Degree profile is {degree_profile:?}");
-
-        // Remove all shatter candidates that do not have enough neigbhours of sufficiently
-        // high degree
-        let new_shatter_candidates = self.shatter_candidates.iter().filter(|v| {
-            let degrees = self.degree_profile(v);
-            dominates_profile(&degrees, &degree_profile)
-        }).cloned().collect();
-
-        self.shatter_candidates = new_shatter_candidates;
-        // self.shatter_candidates.retain(|v| {
-        //     let degrees = self.degree_profile(v);
-        //     dominates_profile(&degrees, &degree_profile)
-        // });
-
-        println!(
-            "  > Found {} out of {n} as witness candidates for {}-shattered set",
-            self.shatter_candidates.len(),
-            self.vc_dim
-        );
-
-        // Update upper bound on vc-dim
-        let mut shatter_degrees:Vec<usize> = self.shatter_candidates.iter().map(|u| self.graph.degree(u) as usize).collect();
-        shatter_degrees.sort_unstable();
-        shatter_degrees.reverse();
-
-        for k in self.vc_dim+1..self.vc_dim_upper {
-            let profile = generate_degree_profile(k);
-            let dominates = dominates_profile(&shatter_degrees, &profile);
-            if !dominates {
-                self.vc_dim_upper = k;
-                println!("Proved new upper bound {}", self.vc_dim_upper);
-                break;
+        let mut new_shatter_candidates = VertexSet::default();
+        for v in self.shatter_candidates.iter() {
+            let degrees = self.degree_profile(&v);
+            if dominates_profile(&degrees, &degree_profile) {
+                new_shatter_candidates.insert(*v);
             }
         }
-        
-        // Filter cover candidates
+        self.shatter_candidates = new_shatter_candidates;
+        println!("  > Found {} out of {n} as candidates for {}-shattered set", self.shatter_candidates.len(), self.vc_dim);
+
         self.cover_candidates.retain(|v| {
             let mut covers = false;
 
-            let mut num_cands = self
-                .graph
-                .left_neighbours_slice(v)
-                .iter()
-                .filter(|u| self.shatter_candidates.contains(u))
-                .count();
+            let mut num_cands = self.graph.left_neighbours_slice(v).iter()
+                .filter(|u| self.shatter_candidates.contains(u)).count();
             num_cands += self.shatter_candidates.contains(v) as usize;
 
             // Update local upper bound
-            self.local_upper_bound
-                .entry(*v)
-                .and_modify(|e| *e = std::cmp::min(*e, num_cands as u8));
+            self.local_upper_bound.entry(*v).and_modify(|e| *e = std::cmp::min(*e, num_cands as u8));
 
-            // v only remains a cover candidate if it sees at least one
+            // v only remains a cover candidate if it sees at least one 
             // candiate vertex
             num_cands > 0
         });
 
-
-        // We proved that if the shattered set has size at least $p:= \ceil{\log d + 1}$, then
-        // there exists a left-cover in which every vertex sees at least a $1 / p$ fraction of the solution.
-        // Therefore, we can exclude vertices whose local upper bound is less than $\ceil{(vc_dim + 1) / p}$.
-        let p = f32::ceil(self.logd + 1f32) as usize;
-        if (self.vc_dim + 1) >= p {
-            let k = self.vc_dim + 1;
-            let limit = (k / p) as u8 + u8::from(k / p != 0); // This is equal to ceil( k / p)
-            self.cover_candidates.retain(|v| self.local_upper_bound[v] >= limit)
-        }
-
-        println!(
-            "  > Found {} out of {n} as cover candidates for {}-shattered set",
-            self.cover_candidates.len(),
-            self.vc_dim
-        );
+        println!("  > Found {} out of {n} as cover candidates for {}-shattered set", self.cover_candidates.len(), self.vc_dim);
     }
 
     pub fn degree_profile(&self, v:&Vertex) -> Vec<usize> {
